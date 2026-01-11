@@ -1,0 +1,165 @@
+plugins {
+    id 'fabric-loom' version '1.14-SNAPSHOT'
+    id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+configurations {
+    includeImplementation
+    // 让implementation扩展自includeImplementation，这样所有implementation依赖也会被加入includeImplementation
+    implementation.extendsFrom includeImplementation
+}
+
+repositories {
+    mavenCentral()
+    maven { url "https://maven.fabricmc.net/" }
+    maven { url "https://jitpack.io" }
+    maven { url 'https://repo1.maven.org/maven2/org/bytedeco/' }
+    maven { url "https://repo.spongepowered.org/repository/maven-public/" }
+    maven { url "https://maven.terraformersmc.com/releases/" }
+    maven { url "https://maven.shedaniel.me/" }
+    maven {url = "https://masa.dy.fi/maven/sakura-ryoko"
+        content {includeGroupAndSubgroups("fi.dy.masa")}
+    }
+}
+
+dependencies {
+    // Minecraft Fabric API
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+    //mappings loom.officialMojangMappingcs()
+
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    // JavaCV core (纯Java)
+    includeImplementation 'org.bytedeco:javacv:1.5.8'
+
+    // JavaCPP 平台特定的本地库（自动检测当前平台）
+    includeImplementation 'org.bytedeco:javacpp-platform:1.5.8'
+
+    // FFmpeg 平台特定的本地库（自动检测当前平台）
+    includeImplementation 'org.bytedeco:ffmpeg-platform:5.1.2-1.5.8'
+
+    modImplementation "org.lwjgl:lwjgl-openal:3.3.3"
+
+    // Apache Commons for utilities
+    includeImplementation 'commons-io:commons-io:2.16.1'
+    modImplementation "fi.dy.masa.malilib:malilib-fabric-1.21.8:0.25.7"
+}
+
+processResources {
+    inputs.property "version", project.version
+    inputs.property "minecraft_version", project.minecraft_version
+    inputs.property "loader_version", project.loader_version
+    filteringCharset "UTF-8"
+
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version,
+                "minecraft_version": project.minecraft_version,
+                "loader_version": project.loader_version
+    }
+}
+
+def targetJavaVersion = 21
+tasks.withType(JavaCompile).configureEach {
+    it.options.encoding = "UTF-8"
+    if (targetJavaVersion >= 10 || JavaVersion.current().isJava10Compatible()) {
+        it.options.release.set(targetJavaVersion)
+    }
+}
+
+java {
+    def javaVersion = JavaVersion.toVersion(targetJavaVersion)
+    if (JavaVersion.current() < javaVersion) {
+        toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
+    }
+    withSourcesJar()
+}
+
+
+// configure the maven publication
+publishing {
+    publications {
+        create("mavenJava", MavenPublication) {
+            artifactId = project.archives_base_name
+            from components.java
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+}
+
+java {
+    withSourcesJar()
+
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+jar {
+    from("LICENSE") {
+        rename { "${it}_${project.base.archivesName.get()}"}
+    }
+
+    // 包含所有依赖，但排除 Kotlin 相关文件
+    from {
+        configurations.includeImplementation.collect {
+            it.isDirectory() ? it : zipTree(it)
+        }
+    }
+
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    // 强制排除 Kotlin 相关文件
+    exclude 'kotlin/**'
+    exclude 'META-INF/*.kotlin_module'
+    exclude 'META-INF/versions/*/kotlin/**'
+    exclude 'org/jetbrains/kotlin/**'
+    exclude '*.kotlin_builtins'
+    exclude 'kotlinx/**'
+
+    // 排除其他不需要的 JavaCV 库
+    exclude 'org/bytedeco/artoolkitplus/**'
+    exclude 'org/bytedeco/flycapture/**'
+    exclude 'org/bytedeco/libdc1394/**'
+    exclude 'org/bytedeco/libfreenect/**'
+    exclude 'org/bytedeco/libfreenect2/**'
+    exclude 'org/bytedeco/librealsense/**'
+    exclude 'org/bytedeco/librealsense2/**'
+    exclude 'org/bytedeco/opencv/**'
+    exclude 'org/bytedeco/tesseract/**'
+    exclude 'org/bytedeco/videoinput/**'
+    exclude 'org/bytedeco/leptonica/**'
+}
+
+remapJar {
+    // 启用 zip64
+    zip64 = true
+    // 排除不必要的文件
+    exclude 'META-INF/LICENSE'
+    exclude 'META-INF/LICENSE.txt'
+    exclude 'META-INF/NOTICE'
+    exclude 'META-INF/NOTICE.txt'
+    exclude 'META-INF/maven/**'
+    exclude 'module-info.class'
+
+    // 排除签名文件
+    exclude 'META-INF/*.SF'
+    exclude 'META-INF/*.DSA'
+    exclude 'META-INF/*.RSA'
+
+    // 排除 Kotlin 文件
+    exclude 'kotlin/**'
+    exclude 'META-INF/*.kotlin_module'
+    exclude 'org/jetbrains/kotlin/**'
+}
